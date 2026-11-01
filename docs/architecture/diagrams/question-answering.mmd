@@ -1,0 +1,54 @@
+sequenceDiagram
+    autonumber
+    actor Client as User / Client App
+    participant Express as Express Gateway
+    participant Mongo as MongoDB
+    participant FastAPI as FastAPI AI Service
+    participant VectorDB as PostgreSQL (pgvector)
+    participant LLM as External LLM Provider
+
+    %% Step 1-2: Request & Authorization
+    Client->>Express: POST /api/v1/conversations/:id/messages { query, documentIds }
+    Note over Express: 1. Authenticate JWT token & extract userId
+    Express->>Mongo: 2. Verify conversation ownership & document access (userId match)
+    Mongo-->>Express: Ownership confirmed & documents verified
+
+    %% Delegate to AI Service
+    Express->>FastAPI: POST /internal/v1/rag/query (query, docIds, userId, history)
+    Note over FastAPI: Verify X-Internal-Service-Key
+
+    %% Step 3: Query Embedding
+    Note over FastAPI: 3. Generate query embedding via configured provider
+    FastAPI->>LLM: Embed query text
+    LLM-->>FastAPI: Dense float vector (dim: 1536)
+
+    %% Step 4: Vector Retrieval
+    FastAPI->>VectorDB: 4. Cosine similarity query WHERE user_id=$1 AND document_id IN ($2)
+    VectorDB-->>FastAPI: Top-K passages with page numbers & similarity scores
+
+    %% Step 5: Optional Reranking
+    opt Reranker Enabled
+        Note over FastAPI: 5. Rerank passages with cross-encoder / relevance scorer
+    end
+
+    %% Step 6: Grounded Prompt Construction
+    Note over FastAPI: 6. Construct prompt: wrap passages in XML delimiters,<br/>frame text as untrusted data, instruct strict grounding & citation
+
+    %% Step 7: LLM Generation
+    FastAPI->>LLM: 7. Generate completion (messages + grounded context)
+    LLM-->>FastAPI: Streamed / completed response with citation tags
+
+    %% Step 8: Citation Extraction
+    Note over FastAPI: 8. Parse structured citations (documentId, pageNumber, excerpt)
+    FastAPI-->>Express: Return { answer, citations, tokenUsage }
+
+    %% Step 9: Message Persistence
+    Express->>Mongo: 9. Persist User Message & Assistant Message with citations
+    Mongo-->>Express: Saved confirmed
+    Express-->>Client: HTTP 200 OK { messageId, answer, citations }
+
+    %% Step 10: Edge Cases & Failure Handling
+    opt Empty Retrieval / Unsupported Question / Provider Timeout
+        Note over FastAPI: 10. Empty retrieval -> return polite "Insufficient info" fallback<br/>Provider error/timeout -> return graceful degradation code
+    end
+

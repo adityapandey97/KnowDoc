@@ -1,0 +1,133 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: knowdoc-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-knowdoc_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-knowdoc_root_password}
+      MONGO_INITDB_DATABASE: knowdoc
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - knowdoc-network
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: knowdoc-postgres-vector
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-knowdoc_vectors}
+      POSTGRES_USER: ${POSTGRES_USER:-knowdoc_vector_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-knowdoc_vector_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-pgvector.sql:/docker-entrypoint-initdb.d/01-init-pgvector.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-knowdoc_vector_user} -d ${POSTGRES_DB:-knowdoc_vectors}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - knowdoc-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: knowdoc-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - knowdoc-network
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../infra/docker/backend.Dockerfile
+    container_name: knowdoc-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-knowdoc_admin}:${MONGO_ROOT_PASSWORD:-knowdoc_root_password}@mongodb:27017/knowdoc?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      AI_SERVICE_URL: http://ai-service:8000
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-dev-internal-secret-change-in-production}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-your-256-bit-jwt-access-secret-placeholder-at-least-32-chars}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your-256-bit-jwt-refresh-secret-placeholder-at-least-32-chars}
+      STORAGE_LOCAL_ROOT: /app/data/storage
+    ports:
+      - "5000:5000"
+    volumes:
+      - storage_data:/app/data/storage
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - knowdoc-network
+
+  ai-service:
+    build:
+      context: ../ai-service
+      dockerfile: ../infra/docker/ai-service.Dockerfile
+    container_name: knowdoc-ai-service
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-knowdoc_vectors}
+      POSTGRES_USER: ${POSTGRES_USER:-knowdoc_vector_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-knowdoc_vector_password}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-dev-internal-secret-change-in-production}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-mock}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - storage_data:/app/data/storage:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - knowdoc-network
+
+volumes:
+  mongodb_data:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  storage_data:
+    driver: local
+
+networks:
+  knowdoc-network:
+    driver: bridge
+

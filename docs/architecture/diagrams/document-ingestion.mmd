@@ -1,0 +1,52 @@
+sequenceDiagram
+    autonumber
+    actor Client as User / Client App
+    participant Express as Express Gateway
+    participant Storage as File Storage Provider
+    participant Mongo as MongoDB
+    participant Queue as Redis (BullMQ Queue)
+    participant Worker as BullMQ Ingestion Worker
+    participant FastAPI as FastAPI AI Service
+    participant VectorDB as PostgreSQL (pgvector)
+
+    %% Step 1: Upload & Validation
+    Client->>Express: POST /api/v1/documents (multipart/form-data)
+    Note over Express: 1. Validate JWT, file size (<=25MB), MIME type & PDF magic bytes (%PDF)
+    
+    %% Step 2: Storage
+    Express->>Storage: 2. Store binary via generated storageKey (uploads/<userId>/<uuid>.pdf)
+    Storage-->>Express: Storage confirmed
+    
+    %% Step 3: Metadata creation
+    Express->>Mongo: 3. Create document metadata (status: "pending", fileHash, name)
+    Mongo-->>Express: Document record created (_id)
+    
+    %% Step 4: Enqueue Job
+    Express->>Queue: 4. Enqueue ingestion job (jobId: ingest_<docId>, docId, userId, storageKey)
+    Express-->>Client: HTTP 202 Accepted { documentId, status: "pending" }
+    
+    %% Ingestion Execution
+    Queue->>Worker: Consume job: process-document
+    Worker->>Mongo: Update status to "processing"
+    
+    %% Step 5-8: AI Service processing
+    Worker->>FastAPI: POST /internal/v1/rag/index (storageKey, docId, userId)
+    Note over FastAPI: 5. Extract text while preserving physical page numbers
+    Note over FastAPI: 6. Chunk text with configurable overlap (800 tokens, 150 overlap)
+    Note over FastAPI: 7. Generate embeddings via replaceable provider adapter
+    FastAPI->>VectorDB: 8. Persist chunk content, metadata & vectors (clean previous if retry)
+    VectorDB-->>FastAPI: Commit confirmed
+    FastAPI-->>Worker: HTTP 200 OK { totalPages, totalChunks, status: "ready" }
+    
+    %% Step 9: State Completion
+    Worker->>Mongo: 9. Mark document status: "ready" with pageCount & chunkCount
+    
+    %% Step 10: Retries & Failure Handling
+    opt On Error / Timeout / Rate Limit
+        Worker->>Worker: 10. Exponential backoff retry (attempts <= 3)
+        alt Retries Exhausted
+            Worker->>VectorDB: Purge orphan chunks for docId
+            Worker->>Mongo: Mark document status: "failed" (with errorReason)
+        end
+    end
+

@@ -1,0 +1,68 @@
+flowchart TD
+    subgraph ClientLayer ["Client Layer"]
+        Browser["React Single Page App (Vite + Tailwind)"]
+    end
+
+    subgraph GatewayLayer ["Application Gateway (Node.js / Express)"]
+        Router["API Router (/api/v1)"]
+        AuthMid["Auth & Tenant Middleware"]
+        ValMid["Validation Middleware (Zod)"]
+        DocController["Document Controller"]
+        ChatController["Conversation Controller"]
+        StorageAdapter["Storage Provider (Local / S3)"]
+        QueueProducer["BullMQ Queue Producer"]
+    end
+
+    subgraph AsyncWorkerLayer ["Asynchronous Processing (Node.js)"]
+        BullWorker["BullMQ Ingestion Worker"]
+    end
+
+    subgraph AIServiceLayer ["AI & RAG Service (Python / FastAPI)"]
+        AIRouter["Internal API Router (/internal/v1)"]
+        Parser["PDF Parser (pypdf/pdfplumber)"]
+        Chunker["Recursive Semantic Chunker"]
+        Embedder["Embedding Engine (OpenAI/Local)"]
+        Retriever["pgvector Retriever"]
+        Generator["Grounded Prompt Generator"]
+    end
+
+    subgraph DataStorageLayer ["Data & Vector Storage"]
+        MongoDB[("MongoDB (App State, Users, Docs, Chats)")]
+        RedisDB[("Redis (Queue State, Caching, Rate Limits)")]
+        PgVectorDB[("PostgreSQL + pgvector (Chunks & Vectors)")]
+        FileStore[("File Storage (uploads/documents)")]
+    end
+
+    subgraph ExternalServices ["External Intelligence Providers"]
+        LLMProvider["LLM Provider (OpenAI GPT-4o-mini / Ollama)"]
+    end
+
+    Browser -->|"HTTPS (REST / JSON)"| Router
+    Router --> AuthMid --> ValMid
+    ValMid --> DocController
+    ValMid --> ChatController
+
+    DocController -->|"Save Binary"| StorageAdapter
+    StorageAdapter -->|"Persist PDF"| FileStore
+    DocController -->|"Create Metadata (pending)"| MongoDB
+    DocController -->|"Enqueue Ingestion Job"| QueueProducer
+    QueueProducer -->|"Push Job"| RedisDB
+
+    BullWorker -->|"Consume Job"| RedisDB
+    BullWorker -->|"Update Status (processing/ready/failed)"| MongoDB
+    BullWorker -->|"POST /internal/v1/rag/index"| AIRouter
+
+    ChatController -->|"Read/Write Messages"| MongoDB
+    ChatController -->|"POST /internal/v1/rag/query"| AIRouter
+
+    AIRouter --> Parser
+    Parser --> Chunker
+    Chunker --> Embedder
+    Embedder -->|"Fetch Embeddings"| LLMProvider
+    Embedder -->|"Store Chunks + Embeddings"| PgVectorDB
+
+    AIRouter --> Retriever
+    Retriever -->|"Cosine Distance Query (user_id filtered)"| PgVectorDB
+    Retriever --> Generator
+    Generator -->|"Grounded Completion with Untrusted Context"| LLMProvider
+

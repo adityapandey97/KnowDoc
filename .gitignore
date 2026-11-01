@@ -1,0 +1,79 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Dependency directories
+node_modules/
+jspm_packages/
+.pnp/
+.pnp.js
+
+# Python virtual environment & cache
+.venv/
+env/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+junit.xml
+
+# Local Storage & Uploads
+data/storage/*
+!data/storage/.gitkeep
+uploads/*
+!uploads/.gitkeep
+temp/
+tmp/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+frontend/dist/
+frontend/.vite/
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
