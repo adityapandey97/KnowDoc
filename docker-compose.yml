@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: knowdoc-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-knowdoc}
+      POSTGRES_USER: ${POSTGRES_USER:-knowdoc_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-knowdoc_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/scripts/init-pgvector.sql:/docker-entrypoint-initdb.d/01-init-pgvector.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-knowdoc_user} -d ${POSTGRES_DB:-knowdoc}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - knowdoc-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: knowdoc-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-knowdoc_user}:${POSTGRES_PASSWORD:-knowdoc_password}@postgres:5432/${POSTGRES_DB:-knowdoc}?sslmode=disable
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-knowdoc}
+      POSTGRES_USER: ${POSTGRES_USER:-knowdoc_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-knowdoc_password}
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-minimum-32-characters-long}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      STORAGE_LOCAL_ROOT: /app/data/storage
+    ports:
+      - "5000:5000"
+    volumes:
+      - storage_data:/app/data/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - knowdoc-network
+
+volumes:
+  postgres_data:
+    driver: local
+  storage_data:
+    driver: local
+
+networks:
+  knowdoc-network:
+    driver: bridge
+
