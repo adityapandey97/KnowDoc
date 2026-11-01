@@ -40,7 +40,7 @@ export const conversationService = {
     };
   },
 
-  async sendMessage(userId, conversationId, queryText) {
+  async sendMessage(userId, conversationId, queryText, useAgent = false) {
     // 1. Verify conversation ownership
     const convo = await conversationRepository.findByUserIdAndId(userId, conversationId);
     if (!convo) {
@@ -62,12 +62,13 @@ export const conversationService = {
       content: m.content
     }));
 
-    // 4. Delegate to AI service for RAG
+    // 4. Delegate to AI service for Grounded RAG or Autonomous Agent
     const aiResponse = await aiServiceClient.queryKnowledgeBase({
       query: queryText,
       userId: userId.toString(),
       documentIds: convo.documentIds.map((id) => id.toString()),
-      conversationHistory: formattedHistory
+      conversationHistory: formattedHistory,
+      useAgent
     });
 
     // 5. Persist assistant message with citations
@@ -83,9 +84,11 @@ export const conversationService = {
         similarityScore: c.similarity_score
       })),
       tokenUsage: {
-        promptTokens: aiResponse.prompt_tokens,
-        completionTokens: aiResponse.completion_tokens,
-        totalTokens: (aiResponse.prompt_tokens || 0) + (aiResponse.completion_tokens || 0)
+        promptTokens: aiResponse.prompt_tokens ?? aiResponse.usage?.prompt_tokens ?? 0,
+        completionTokens: aiResponse.completion_tokens ?? aiResponse.usage?.completion_tokens ?? 0,
+        totalTokens:
+          (aiResponse.prompt_tokens ?? aiResponse.usage?.prompt_tokens ?? 0) +
+          (aiResponse.completion_tokens ?? aiResponse.usage?.completion_tokens ?? 0)
       }
     });
 

@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { ChatWindow } from '../../components/chat/ChatWindow.jsx';
 import { Card } from '../../components/ui/Card.jsx';
 import { FileText, ShieldAlert } from 'lucide-react';
+import { chatService } from '../../services/chatService.js';
 
-export function ChatModule({ documents, selectedDoc, onSelectDoc }) {
+export function ChatModule({ documents, selectedDoc, onSelectDoc, activeConversationId = null }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const handleSendMessage = async (query) => {
+  const handleSendMessage = async (query, useAgent = false) => {
     // Optimistic user message
     const userMsg = {
       id: Date.now().toString(),
@@ -18,14 +19,26 @@ export function ChatModule({ documents, selectedDoc, onSelectDoc }) {
     setLoading(true);
 
     try {
-      // In Phase 1 foundation, if no active conversation exists, run direct query or mock response
       const token = localStorage.getItem('knowdoc_access_token');
-      // Simulated answer for Phase 1 starter
+      if (token && activeConversationId) {
+        const response = await chatService.sendMessage(activeConversationId, query, useAgent);
+        const assistantMsg = {
+          id: response.data.messageId || (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: response.data.content,
+          citations: response.data.citations || []
+        };
+        setMessages((prev) => [...prev, assistantMsg]);
+        setLoading(false);
+        return;
+      }
+
+      // Offline preview / demo mode
       setTimeout(() => {
         const assistantMsg = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: `Analysis of query: "${query}". Based on ${selectedDoc ? selectedDoc.filename : 'indexed documents'}, key operations and metrics are verified.`,
+          content: `Analysis of query: "${query}". Based on ${selectedDoc ? selectedDoc.filename : 'indexed documents'}, key operations and metrics are verified.${useAgent ? ' [Autonomous Agent Tool Reasoning Active]' : ''}`,
           citations: selectedDoc
             ? [
                 {

@@ -74,15 +74,40 @@ export class AiServiceClient {
     });
   }
 
-  async queryKnowledgeBase({ query, userId, documentIds, topK = 5, conversationHistory = [] }) {
-    return this.#request('/internal/v1/rag/query', {
+  async queryKnowledgeBase({ query, userId, documentIds, topK = 5, conversationHistory = [], useAgent = false }) {
+    return this.#request('/internal/v1/chat', {
       method: 'POST',
       body: JSON.stringify({
         query,
         user_id: userId,
         document_ids: documentIds,
         top_k: topK,
-        conversation_history: conversationHistory
+        conversation_history: conversationHistory,
+        use_agent: useAgent
+      })
+    });
+  }
+
+  async chatWithAgent({ query, userId, documentIds, topK = 5, conversationHistory = [] }) {
+    return this.queryKnowledgeBase({
+      query,
+      userId,
+      documentIds,
+      topK,
+      conversationHistory,
+      useAgent: true
+    });
+  }
+
+  async retrieveChunks({ query, userId, documentIds, topK = 5, threshold = 0.20 }) {
+    return this.#request('/internal/v1/retrieval', {
+      method: 'POST',
+      body: JSON.stringify({
+        query,
+        user_id: userId,
+        document_ids: documentIds,
+        top_k: topK,
+        threshold
       })
     });
   }

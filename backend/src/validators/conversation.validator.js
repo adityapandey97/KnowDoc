@@ -6,7 +6,8 @@ export const createConversationSchema = z.object({
 });
 
 export const sendMessageSchema = z.object({
-  query: z.string().min(1, 'Query cannot be empty').max(4000, 'Query exceeds 4000 character limit')
+  query: z.string().min(1, 'Query cannot be empty').max(4000, 'Query exceeds 4000 character limit'),
+  useAgent: z.boolean().optional().default(false)
 });
 
 export const conversationIdParamSchema = z.object({

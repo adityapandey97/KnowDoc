@@ -56,14 +56,19 @@
    - Exposes versioned internal endpoints protected by `X-Internal-Service-Key`.
    - Directly interfaces with PostgreSQL (`pgvector`) for vector storage and cosine distance similarity queries.
    - Abstracts embedding and generation providers (OpenAI, HuggingFace, Anthropic, Ollama).
-4. **Primary Application Database (MongoDB)**:
-   - Stores users, organizational metadata, document records (status, storage key, file hash, page count), conversations, and messages.
+4. **Primary Application Database (PostgreSQL)**:
+   - Stores users, sessions, organizational metadata, document records (status, storage key, file hash, page count), conversations, and messages with relational integrity and transactional ACID guarantees.
 5. **Vector Database (PostgreSQL + pgvector)**:
    - Dedicated vector repository storing chunk text, token counts, physical page numbers, and vector embeddings (`vector(1536)`).
    - Enforces user-level partition filtering to eliminate cross-tenant leakage.
-6. **Task Broker & Cache (Redis & BullMQ)**:
+6. **AI Agent & Tool Calling Engine (Phase 4)**:
+   - Autonomous agent orchestrator supporting tool execution (`search_documents`, `summarize_document`, `retrieve_document_page`).
+   - Bounded execution loops (up to 4 iterations) with strict per-tool timeouts.
+   - Grounded RAG synthesis with `<context_passages>` XML fencing, prompt injection neutralization, and mandatory refusal phrase (`"I do not have sufficient information in the provided document(s) to answer this question."`) when evidence is missing.
+   - Verifiable structured citations (`documentId`, `documentName`, `pageNumber`, `chunkId`, `excerpt`, `similarityScore`).
+7. **Task Broker & Cache (Redis & BullMQ)**:
    - Manages asynchronous ingestion job queues (`knowdoc:queue:ingestion`), job retries, exponential backoffs, and rate-limiting counters.
-7. **Storage Provider**:
+8. **Storage Provider**:
    - Stores immutable raw PDF binaries via a clean interface (`IStorageProvider`), supporting local directory storage for development and S3-compatible cloud storage for production.
 
 ---

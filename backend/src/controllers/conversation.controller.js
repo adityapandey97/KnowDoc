@@ -72,7 +72,8 @@ export const conversationController = {
       const message = await conversationService.sendMessage(
         req.user.id,
         req.params.id,
-        req.body.query
+        req.body.query,
+        Boolean(req.body.useAgent)
       );
       res.status(200).json({
         success: true,

@@ -5,11 +5,12 @@ import { Button } from '../ui/Button.jsx';
 
 export function ChatWindow({ messages = [], onSendMessage, isLoading, selectedDocument }) {
   const [inputQuery, setInputQuery] = useState('');
+  const [useAgent, setUseAgent] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!inputQuery.trim() || isLoading) return;
-    onSendMessage(inputQuery);
+    onSendMessage(inputQuery, useAgent);
     setInputQuery('');
   };
 
@@ -102,9 +103,22 @@ export function ChatWindow({ messages = [], onSendMessage, isLoading, selectedDo
             }
             className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
           />
+          <button
+            type="button"
+            onClick={() => setUseAgent(!useAgent)}
+            className={`px-3 py-2 text-xs font-semibold rounded-xl border flex items-center gap-1.5 transition-all ${
+              useAgent
+                ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300 shadow-sm shadow-indigo-500/20'
+                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+            }`}
+            title="Enable multi-step autonomous agent tools"
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${useAgent ? 'text-indigo-400' : 'text-slate-500'}`} />
+            <span>Agent</span>
+          </button>
           <Button type="submit" disabled={!inputQuery.trim() || isLoading}>
             <Send className="w-4 h-4 mr-1.5" />
-            Ask
+            {useAgent ? 'Run Agent' : 'Ask'}
           </Button>
         </div>
       </form>

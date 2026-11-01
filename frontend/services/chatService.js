@@ -13,8 +13,8 @@ export const chatService = {
     return apiClient.get(`/conversations/${id}`);
   },
 
-  async sendMessage(conversationId, query) {
-    return apiClient.post(`/conversations/${conversationId}/messages`, { query });
+  async sendMessage(conversationId, query, useAgent = false) {
+    return apiClient.post(`/conversations/${conversationId}/messages`, { query, useAgent });
   }
 };
 

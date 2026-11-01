@@ -242,3 +242,72 @@ The FastAPI service exposes private endpoints restricted to the internal network
   LIMIT $5;
   ```
 
+---
+
+## 6. Phase 4 — AI Agent Architecture & Tool Registry
+
+### 6.1 Agent Execution Safeguards
+- **Maximum Loop Iterations**: 4 turns (`agent_max_iterations = 4`). If goals are unresolved, synthesizes best grounded answer with current state.
+- **Execution Timeouts**: Strict 15-second timeout on tool invocations (`asyncio.wait_for`).
+- **Prompt Injection Defense**: All user documents treated as untrusted and encapsulated inside `<context_passages>`. System prompts reject internal overrides.
+- **Refusal Guarantee**: Returns verbatim `I do not have sufficient information in the provided document(s) to answer this question.` when evidence is lacking.
+
+### 6.2 Agent Tools Specification
+
+#### 1. `search_documents`
+Executes semantic vector search constrained by tenant ID and target documents:
+```json
+{
+  "name": "search_documents",
+  "description": "Searches authorized document chunks using semantic similarity.",
+  "parameters": {
+    "query": { "type": "string", "description": "Semantic search query" },
+    "user_id": { "type": "string", "description": "Tenant ID" },
+    "document_ids": { "type": "array", "items": { "type": "string" } },
+    "top_k": { "type": "integer", "default": 5 }
+  }
+}
+```
+
+#### 2. `summarize_document`
+Extracts leading pages and synthesizes an executive summary:
+```json
+{
+  "name": "summarize_document",
+  "description": "Synthesizes an executive overview of a document.",
+  "parameters": {
+    "document_id": { "type": "string", "description": "Target document ID" },
+    "user_id": { "type": "string", "description": "Tenant ID" },
+    "max_pages": { "type": "integer", "default": 5 }
+  }
+}
+```
+
+#### 3. `retrieve_document_page`
+Fetches exact text chunks from a specific page:
+```json
+{
+  "name": "retrieve_document_page",
+  "description": "Retrieves verbatim chunks from a specific physical page.",
+  "parameters": {
+    "document_id": { "type": "string", "description": "Target document ID" },
+    "page_number": { "type": "integer", "description": "1-based page number" },
+    "user_id": { "type": "string", "description": "Tenant ID" }
+  }
+}
+```
+
+### 6.3 Citation Validation Model
+Every returned citation is programmatically verified against the retrieved source chunk:
+```python
+class Citation(BaseModel):
+    document_id: str
+    document_name: Optional[str]
+    page_number: int
+    chunk_id: str
+    excerpt: str
+    similarity_score: float
+```
+Citations referencing unretrieved chunks or hallucinated text are rejected before client delivery.
+
+
